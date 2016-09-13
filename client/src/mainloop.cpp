@@ -1,6 +1,10 @@
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
 #include <mathfu/glsl_mappings.h>
+#include <enet/enet.h>
+#include <flatbuffers/flatbuffers.h>
+
+#include <tag/flatbuf/gamestate_generated.h>
 
 #include <glh/Buffer.hpp>
 #include <glh/VArray.hpp>
@@ -47,12 +51,12 @@ const GLchar* circleVShaderSrc =
 	"uniform mat4 uMVP;\n"
 	"layout(location = 0) in vec2 aPos;\n"
 	"layout(location = 1) in vec4 aColor;\n"
-	"layout(location = 3) in vec4 aScaleAndTranslate;\n"
+	"layout(location = 2) in vec3 aScaleAndTranslate;\n"
 	"\n"
 	"out vec4 fColor;\n"
 	"\n"
 	"void main() {\n"
-	"    gl_Position = uMVP * vec4(((aPos * aScaleAndTranslate.xy) + aScaleAndTranslate.zw), 0.0, 1.0);\n"
+	"    gl_Position = uMVP * vec4(((aPos * aScaleAndTranslate.z) + aScaleAndTranslate.xy), 0.0, 1.0);\n"
 	"    fColor = aColor;\n"
 	"}\n";
 
@@ -77,15 +81,16 @@ bool linkProgram(glh::Program& p, const char* name) {
 	return true;
 }
 
-void mainloop(SDL_Window* win) {
+void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	using namespace std;
 	using namespace glh;
 	using namespace mathfu;
-	using namespace geom;
+	using geom::Circle;
+	using geom::Polygon;
+	using namespace tag::flatbuf;
 	
 	Buffer circleVerts(GL_ARRAY_BUFFER);
 	const int CIRCLE_SEGMENTS = 64;
-	
 	{
 		Circle unitCircle(vec2(0.0, 0.0), 1.0);
 		Polygon unitCircleTess(unitCircle, CIRCLE_SEGMENTS);
@@ -98,11 +103,13 @@ void mainloop(SDL_Window* win) {
 		
 		circleVerts.data(CIRCLE_SEGMENTS * 2 * sizeof(GLfloat), vBuf, GL_STATIC_DRAW);
 	}
-
+	
+	// Meant for instanced rendering of circles
 	VArray circleVAO;
 	circleVAO.enableVertexAttrib(0);
 	circleVAO.vertexAttribPointer(circleVerts, 0, 2, GL_FLOAT);
-	
+	glVertexAttribDivisor(1, 0);
+
 	Shader basicVShader(GL_VERTEX_SHADER);
 	basicVShader.source(vShaderSrc);
 	if(!compileShader(basicVShader, "basic vertex")) return;
@@ -110,16 +117,18 @@ void mainloop(SDL_Window* win) {
 	Shader circleVShader(GL_VERTEX_SHADER);
 	circleVShader.source(circleVShaderSrc);
 	if(!compileShader(circleVShader, "circle vertex")) return;
-	
+
 	Shader basicFShader(GL_FRAGMENT_SHADER);
 	basicFShader.source(fShaderSrc);
 	if(!compileShader(basicFShader, "basic fragment")) return;
-	
+
+	// Meant for arbitrary meshes
 	Program basicProgram;
 	basicProgram.setVertexShader(basicVShader);
 	basicProgram.setFragmentShader(basicFShader);
 	if(!linkProgram(basicProgram, "basic")) return;
-	
+
+	// Meant for instanced rendering of circles
 	Program circleProgram;
 	circleProgram.setVertexShader(circleVShader);
 	circleProgram.setFragmentShader(basicFShader);
@@ -131,20 +140,65 @@ void mainloop(SDL_Window* win) {
 	mat4 view = mat4::LookAt(vec3(0.0), vec3(0.0, 0.0, 0.5), vec3(0.0, 1.0, 0.0), 1.0);
 	mat4 proj = mat4::Ortho(-20.0, 20.0, -20.0, 20.0, 0.1, 5.0);
 	mat4 mvp = proj * view;
-	
+
 	glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
 
+	Buffer playerData(GL_ARRAY_BUFFER);
+	circleVAO.enableVertexAttrib(1);
+	circleVAO.vertexAttribPointer(playerData, 1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 16, 12);
+	glVertexAttribDivisor(1, 1);
+	
+	circleVAO.enableVertexAttrib(2);
+	circleVAO.vertexAttribPointer(playerData, 2, 3, GL_FLOAT, GL_FALSE, 16, 0);
+	glVertexAttribDivisor(2, 1);
+
+	PlayerState stateBuf[32];
+	int nPlayers = 0;
+	
 	while(true) {
-		SDL_Event e;
-		while(SDL_PollEvent(&e)) {
-			switch(e.type) {
-			case SDL_QUIT: {
-				return;
-			}
+		// Network events / player state update
+		{
+			ENetEvent e;
+			const int MAX_EVENTS = 10;
+			int curEvent = 0;
+			while((enet_host_service(client, &e, 0) > 0) && (curEvent++ < MAX_EVENTS)) {
+				switch(e.type) {
+				case ENET_EVENT_TYPE_DISCONNECT: {
+					cerr << "Disconnected from server!" << endl;
+					return;
+				}
+				case ENET_EVENT_TYPE_RECEIVE: {
+					auto snapshot = flatbuffers::GetRoot<Snapshot>(e.packet->data);
+					auto players = snapshot->players();
+					nPlayers = players->size();
+
+					for(size_t i = 0; i < nPlayers; i++) {
+						memcpy(stateBuf + i, players->Get(i), sizeof(PlayerState));
+					}
+					
+					// buffer orphaning
+					playerData.data(32 * sizeof(PlayerState), nullptr, GL_STATIC_DRAW);
+					playerData.subData(0, nPlayers * sizeof(PlayerState), stateBuf);
+
+					enet_packet_destroy(e.packet);
+					break;
+				}
+				default: break;
+				}
 			}
 		}
-		
-		// handle framebuffer resizing
+
+		// Input events
+		{
+			SDL_Event e;
+			while(SDL_PollEvent(&e)) {
+				switch(e.type) {
+				case SDL_QUIT: return;
+				}
+			}
+		}
+
+		// Framebuffer resizing
 		{
 			vec2i newSize;
 			SDL_GL_GetDrawableSize(win, &newSize.x(), &newSize.y());
@@ -153,15 +207,13 @@ void mainloop(SDL_Window* win) {
 				glViewport(0, 0, size.x(), size.y());
 			}
 		}
-		
+
 		glClear(GL_COLOR_BUFFER_BIT);
-		basicProgram.use();
+		circleProgram.use();
 		glUniformMatrix4fv(basicProgram.getUniform("uMVP"), 1, GL_FALSE, &mvp[0]);
 		circleVAO.bind();
-		glVertexAttrib4f(1, 0.0, 1.0, 0.0, 1.0);
-		glDrawArrays(GL_TRIANGLE_FAN, 0, CIRCLE_SEGMENTS);
+		glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, CIRCLE_SEGMENTS, nPlayers);
 
 		SDL_GL_SwapWindow(win);
 	}
-	
 }

@@ -5,7 +5,9 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/../shared/cmake")
 
+find_package(ENet REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
@@ -25,6 +27,7 @@ target_include_directories(tag_client
     PRIVATE ${CMAKE_SOURCE_DIR}/src
     PRIVATE ${CMAKE_SOURCE_DIR}/include
     PRIVATE ${CMAKE_SOURCE_DIR}/../shared/include
+    PRIVATE ${ENet_INCLUDE_DIRS}
     PRIVATE ${SDL2_INCLUDE_DIR}
     PRIVATE ${GLEW_INCLUDE_DIRS})
 
@@ -37,6 +40,7 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 endif()
 
 target_link_libraries(tag_client
+    ${ENet_LIBRARIES}
     ${GLEW_LIBRARIES}
     ${OPENGL_LIBRARIES}
     ${SDL2_LIBRARY})

@@ -1,9 +1,13 @@
+#include <tag/flatbuf/gamestate_generated.h>
+
 #include <enet/enet.h>
+#include <flatbuffers/flatbuffers.h>
 
 #include <iostream>
 #include <string>
 #include <cstdlib>
 #include <csignal>
+#include <chrono>
 
 const int PORT = 9998;
 volatile bool done = false;
@@ -32,6 +36,9 @@ static void logExit(const char* msg) {
 }
 
 int main(int argc, char** argv) {
+	using namespace flatbuffers;
+	using namespace tag::flatbuf;
+
 	signal(SIGINT, sigCatcher);
 	signal(SIGTERM, sigCatcher);
 
@@ -49,12 +56,28 @@ int main(int argc, char** argv) {
 	if(!server) {
 		logExit("Could not start server.");
 	} else {
+		log("Started server.");
 	}
+	
+	PlayerState states[] = {
+		PlayerState(Vec2( 0.0,  0.0), 1.0, Color(255, 255, 255, 255)),
+		PlayerState(Vec2( 4.0,  4.0), 1.0, Color(255,   0,   0, 255)),
+		PlayerState(Vec2( 4.0, -4.0), 1.0, Color(  0, 255,   0, 255)),
+		PlayerState(Vec2(-4.0, -4.0), 1.0, Color(  0,   0, 255, 255)),
+		PlayerState(Vec2(-4.0,  4.0), 1.0, Color(255, 255,   0, 255)),
+	};
+	int nStates = sizeof(states) / sizeof(states[0]);
 
+	//Simple world
+	FlatBufferBuilder builder;
+	auto statesOffset = builder.CreateVectorOfStructs(states, nStates);
+	auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, 0);
+	builder.Finish(snapshot);
+	
 	while(!done) {
 		ENetEvent ev;
 		
-		const int MAX_EVENTS = 10;
+		const int MAX_EVENTS = 64;
 		int curEvent = 0;
 		while((enet_host_service(server, &ev, 10) > 0) && (curEvent++ < MAX_EVENTS)) {
 			switch(ev.type) {
@@ -62,20 +85,21 @@ int main(int argc, char** argv) {
 				std::cout << "New connection!" << std::endl;
 				break;
 			case ENET_EVENT_TYPE_RECEIVE: {
-				std::cout << "Received packet!" << std::endl;
-				ENetPacket* toSend = enet_packet_create(
-				                         ev.packet->data,
-				                         ev.packet->dataLength,
-				                         ENET_PACKET_FLAG_RELIABLE);
-				enet_host_broadcast(server, 0, toSend);
+				std::cout << "Received packet! ignoring..." << std::endl;
 				enet_packet_destroy(ev.packet);
 				break; }
 			case ENET_EVENT_TYPE_DISCONNECT:
-				std::cout << "Lost connection" << std::endl;
+				std::cout << "Lost connection." << std::endl;
 				break;
-
 			}
 		}
+		
+		ENetPacket* toSend = enet_packet_create(
+					 builder.GetBufferPointer(),
+					 builder.GetSize(), //size
+					 0);
+
+		enet_host_broadcast(server, 0, toSend);
 
 		enet_host_flush(server);
 	}

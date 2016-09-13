@@ -1,6 +1,7 @@
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 #include <mathfu/glsl_mappings.h>
+#include <enet/enet.h>
 
 #include <iostream>
 
@@ -17,10 +18,43 @@ void APIENTRY gl_error(GLenum src, GLenum type, GLuint id, GLenum severity, GLsi
 
 #endif
 
-void mainloop(SDL_Window* win);
+void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server);
 
 int main() {
 	using namespace std;
+
+	if(enet_initialize()) {
+		cerr << "Failed to init enet" << endl;
+		return -1;
+	}
+
+	ENetHost* client = enet_host_create(NULL, 1, 2, 0, 0);
+	if(!client) {
+		cerr << "Failed to init enet client" << endl;
+		return -1;
+	}
+
+	ENetPeer* server = nullptr;
+	{
+		ENetAddress address;
+		enet_address_set_host(&address, "localhost");
+		address.port = 9998;
+
+		server = enet_host_connect(client, &address, 2, 0);
+
+		ENetEvent event;
+		if(!((enet_host_service(client, &event, 1000) > 0) && event.type == ENET_EVENT_TYPE_CONNECT)) {
+			enet_peer_reset(server);
+			server = nullptr;
+		}
+	}
+	if(!server) {
+		cerr << "Could not connect to localhost:9998" << endl;
+		return -1;
+	}
+
+	//get the server to notice us
+	enet_host_flush(client);
 
 	if(SDL_Init(SDL_INIT_EVERYTHING)) {
 		cerr << "Failed to init SDL" << endl;
@@ -78,7 +112,11 @@ int main() {
 #endif
 
 	//ready
-	mainloop(win);
+	mainloop(win, client, server);
+	
+	enet_peer_disconnect_now(server, 0);
+	enet_host_destroy(client);
+	enet_deinitialize();
 
 	SDL_GL_DeleteContext(glc);
 	SDL_DestroyWindow(win);
