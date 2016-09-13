@@ -1,0 +1,21 @@
+include "gamestate.fbs";
+include "map.fbs";
+include "inputs.fbs";
+
+namespace tag.flatbuf;
+
+/// A packet sent from a client realtime
+union ClientPacketRT { PlayerInput }
+
+/// A packet sent from the server realtime
+union ServerPacketRT { Snapshot }
+
+/// A reliable packet sent from a client
+union ClientPacket { ACK, NAK }
+
+/// A reliable packet sent from the server
+union ServerPacket { ACK, NAK }
+
+/// Acknowledgement of previous messages
+table ACK {}
+table NAK {}

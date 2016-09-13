@@ -1,0 +1,11 @@
+include "common.fbs";
+
+namespace tag.flatbuf;
+
+/// Player's input
+table PlayerInput {
+    /// The player's desired direction of movement.
+    /// A length of 0 indicates no movement,
+    /// while a length of 1 indicates movement at max speed.
+    movement:Vec2;
+}

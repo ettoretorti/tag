@@ -1,0 +1,35 @@
+namespace tag.flatbuf;
+
+/// Represents a 2 dimensional vector
+struct Vec2 {
+    /// First component
+    x:float;
+    /// Second component
+    y:float;
+}
+
+/// Represents a color in RGBA space
+struct Color {
+    /// Red channel
+    r:ubyte;
+    /// Green channel
+    g:ubyte;
+    /// Blue channel
+    b:ubyte;
+    /// Alpha channel
+    a:ubyte;
+}
+
+/// Represents a circle
+table Circle {
+    /// The circle's center point
+    center:Vec2;
+    /// The circle's radius, defaults to 1.0 because that's the default player radius
+    radius:float = 1.0;
+}
+
+/// Represents a convex (!) polygon
+table Polygon {
+    /// The polygon's vertices, in a counter-clockwise winding
+    vertices:[Vec2];
+}

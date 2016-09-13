@@ -1,0 +1,24 @@
+include "common.fbs";
+
+namespace tag.flatbuf;
+
+/// Represents an obstacle on a map
+union Obstacle { Circle, Polygon }
+
+/// An Obstacle combined with a Color
+table ObstacleWColor {
+    /// The Obstacle
+    obstacle:Obstacle;
+    /// The color
+    color:Color;
+}
+
+/// Represents a map
+table Map {
+    /// The width and height of the map
+    dimensions:Vec2;
+    /// The background color
+    background:Color;
+    /// The obstacles
+    obstacles:[ObstacleWColor];
+}

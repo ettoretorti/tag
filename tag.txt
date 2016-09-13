@@ -1,0 +1,48 @@
+Tag Game
+========
+  - Like schoolyard tag, but on a computer!
+  - All game calculations are done server side
+  - Fixed tick rate
+  - Client prediction = extrapolation of last X ticks
+
+Maps
+====
+  - Axis aligned rectangle area
+  - Can contain obstactles
+  - Flatbuffers
+  - Initially handbuilt, could be prodecural
+
+Players
+=======
+  - Moving circle
+  - Classes (initially "it" or "not it", can be extended)
+
+Physics engine
+==============
+  - Use google mathfu for vectors/matrices
+  - Shouldn't need any sort of space partitioning acceleration at this scale
+  - Divide static geometry from players
+
+Networking
+==========
+  - Use google flatbuffers for serialization
+  - Send data over UDP using ENet
+  - Server should only send objects in a client's PVS (AABB culling)
+
+Graphics/Client
+========
+  - SDL2 + OpenGL ES + OpenAL for maximum portability
+  - nuklear for GUI work
+  - 2D topdown view is sufficient
+  - Fixed aspect ratio for all players
+  - Player colors assigned by server for consistency
+
+Replays
+=======
+  - Store all game packets throughout the match (even unsent), allows for easy replaying on the client side
+
+Audio
+=====
+  - Collision sounds
+  - Cringy voiceover announcements
+  - Background music

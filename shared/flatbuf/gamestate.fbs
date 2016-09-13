@@ -1,0 +1,26 @@
+include "common.fbs";
+
+namespace tag.flatbuf;
+
+/// Represents a player's state
+//  avoids using the "Circle" table to allow this data
+//  to be passed directly to opengl
+struct PlayerState {
+    /// Player's position
+    pos:Vec2;
+    /// Player's radius
+    radius:float;
+    /// Player's color
+    color:Color;
+}
+
+/// Represents the state of the world at a given time
+table Snapshot {
+    /// The in game time this snapshot was taken
+    curtime:double;
+    /// The states of all players
+    players:[PlayerState];
+    /// The index of the player the snapshot is being sent to,
+    /// -1 for replays
+    personalIdx:byte;
+}
