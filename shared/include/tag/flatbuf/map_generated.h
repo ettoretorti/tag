@@ -40,10 +40,13 @@ struct ObstacleWColor FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_COLOR = 8
   };
   Obstacle obstacle_type() const { return static_cast<Obstacle>(GetField<uint8_t>(VT_OBSTACLE_TYPE, 0)); }
+  bool mutate_obstacle_type(Obstacle _obstacle_type) { return SetField(VT_OBSTACLE_TYPE, static_cast<uint8_t>(_obstacle_type)); }
   /// The Obstacle
   const void *obstacle() const { return GetPointer<const void *>(VT_OBSTACLE); }
+  void *mutable_obstacle() { return GetPointer<void *>(VT_OBSTACLE); }
   /// The color
   const tag::flatbuf::Color *color() const { return GetStruct<const tag::flatbuf::Color *>(VT_COLOR); }
+  tag::flatbuf::Color *mutable_color() { return GetStruct<tag::flatbuf::Color *>(VT_COLOR); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_OBSTACLE_TYPE) &&
@@ -88,10 +91,13 @@ struct Map FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   };
   /// The width and height of the map
   const tag::flatbuf::Vec2 *dimensions() const { return GetStruct<const tag::flatbuf::Vec2 *>(VT_DIMENSIONS); }
+  tag::flatbuf::Vec2 *mutable_dimensions() { return GetStruct<tag::flatbuf::Vec2 *>(VT_DIMENSIONS); }
   /// The background color
   const tag::flatbuf::Color *background() const { return GetStruct<const tag::flatbuf::Color *>(VT_BACKGROUND); }
+  tag::flatbuf::Color *mutable_background() { return GetStruct<tag::flatbuf::Color *>(VT_BACKGROUND); }
   /// The obstacles
   const flatbuffers::Vector<flatbuffers::Offset<ObstacleWColor>> *obstacles() const { return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<ObstacleWColor>> *>(VT_OBSTACLES); }
+  flatbuffers::Vector<flatbuffers::Offset<ObstacleWColor>> *mutable_obstacles() { return GetPointer<flatbuffers::Vector<flatbuffers::Offset<ObstacleWColor>> *>(VT_OBSTACLES); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<tag::flatbuf::Vec2>(verifier, VT_DIMENSIONS) &&

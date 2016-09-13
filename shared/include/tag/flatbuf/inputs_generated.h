@@ -21,6 +21,7 @@ struct PlayerInput FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   /// A length of 0 indicates no movement,
   /// while a length of 1 indicates movement at max speed.
   const tag::flatbuf::Vec2 *movement() const { return GetStruct<const tag::flatbuf::Vec2 *>(VT_MOVEMENT); }
+  tag::flatbuf::Vec2 *mutable_movement() { return GetStruct<tag::flatbuf::Vec2 *>(VT_MOVEMENT); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<tag::flatbuf::Vec2>(verifier, VT_MOVEMENT) &&

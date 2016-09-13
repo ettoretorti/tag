@@ -30,8 +30,10 @@ MANUALLY_ALIGNED_STRUCT(4) Vec2 FLATBUFFERS_FINAL_CLASS {
 
   /// First component
   float x() const { return flatbuffers::EndianScalar(x_); }
+  void mutate_x(float _x) { flatbuffers::WriteScalar(&x_, _x); }
   /// Second component
   float y() const { return flatbuffers::EndianScalar(y_); }
+  void mutate_y(float _y) { flatbuffers::WriteScalar(&y_, _y); }
 };
 STRUCT_END(Vec2, 8);
 
@@ -51,12 +53,16 @@ MANUALLY_ALIGNED_STRUCT(1) Color FLATBUFFERS_FINAL_CLASS {
 
   /// Red channel
   uint8_t r() const { return flatbuffers::EndianScalar(r_); }
+  void mutate_r(uint8_t _r) { flatbuffers::WriteScalar(&r_, _r); }
   /// Green channel
   uint8_t g() const { return flatbuffers::EndianScalar(g_); }
+  void mutate_g(uint8_t _g) { flatbuffers::WriteScalar(&g_, _g); }
   /// Blue channel
   uint8_t b() const { return flatbuffers::EndianScalar(b_); }
+  void mutate_b(uint8_t _b) { flatbuffers::WriteScalar(&b_, _b); }
   /// Alpha channel
   uint8_t a() const { return flatbuffers::EndianScalar(a_); }
+  void mutate_a(uint8_t _a) { flatbuffers::WriteScalar(&a_, _a); }
 };
 STRUCT_END(Color, 4);
 
@@ -68,8 +74,10 @@ struct Circle FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   };
   /// The circle's center point
   const Vec2 *center() const { return GetStruct<const Vec2 *>(VT_CENTER); }
+  Vec2 *mutable_center() { return GetStruct<Vec2 *>(VT_CENTER); }
   /// The circle's radius, defaults to 1.0 because that's the default player radius
   float radius() const { return GetField<float>(VT_RADIUS, 1.0f); }
+  bool mutate_radius(float _radius) { return SetField(VT_RADIUS, _radius); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<Vec2>(verifier, VT_CENTER) &&
@@ -107,6 +115,7 @@ struct Polygon FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   };
   /// The polygon's vertices, in a counter-clockwise winding
   const flatbuffers::Vector<const Vec2 *> *vertices() const { return GetPointer<const flatbuffers::Vector<const Vec2 *> *>(VT_VERTICES); }
+  flatbuffers::Vector<const Vec2 *> *mutable_vertices() { return GetPointer<flatbuffers::Vector<const Vec2 *> *>(VT_VERTICES); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<flatbuffers::uoffset_t>(verifier, VT_VERTICES) &&

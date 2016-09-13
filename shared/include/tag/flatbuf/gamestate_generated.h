@@ -29,10 +29,13 @@ MANUALLY_ALIGNED_STRUCT(4) PlayerState FLATBUFFERS_FINAL_CLASS {
 
   /// Player's position
   const tag::flatbuf::Vec2 &pos() const { return pos_; }
+  tag::flatbuf::Vec2 &mutable_pos() { return pos_; }
   /// Player's radius
   float radius() const { return flatbuffers::EndianScalar(radius_); }
+  void mutate_radius(float _radius) { flatbuffers::WriteScalar(&radius_, _radius); }
   /// Player's color
   const tag::flatbuf::Color &color() const { return color_; }
+  tag::flatbuf::Color &mutable_color() { return color_; }
 };
 STRUCT_END(PlayerState, 16);
 
@@ -45,11 +48,14 @@ struct Snapshot FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   };
   /// The in game time this snapshot was taken
   double curtime() const { return GetField<double>(VT_CURTIME, 0.0); }
+  bool mutate_curtime(double _curtime) { return SetField(VT_CURTIME, _curtime); }
   /// The states of all players
   const flatbuffers::Vector<const PlayerState *> *players() const { return GetPointer<const flatbuffers::Vector<const PlayerState *> *>(VT_PLAYERS); }
+  flatbuffers::Vector<const PlayerState *> *mutable_players() { return GetPointer<flatbuffers::Vector<const PlayerState *> *>(VT_PLAYERS); }
   /// The index of the player the snapshot is being sent to,
   /// -1 for replays
   int8_t personalIdx() const { return GetField<int8_t>(VT_PERSONALIDX, 0); }
+  bool mutate_personalIdx(int8_t _personalIdx) { return SetField(VT_PERSONALIDX, _personalIdx); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<double>(verifier, VT_CURTIME) &&
