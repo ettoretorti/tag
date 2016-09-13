@@ -7,6 +7,7 @@
 #include <string>
 #include <cstdlib>
 #include <csignal>
+#include <cmath>
 #include <chrono>
 
 const int PORT = 9998;
@@ -68,12 +69,9 @@ int main(int argc, char** argv) {
 	};
 	int nStates = sizeof(states) / sizeof(states[0]);
 
-	//Simple world
-	FlatBufferBuilder builder;
-	auto statesOffset = builder.CreateVectorOfStructs(states, nStates);
-	auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, 0);
-	builder.Finish(snapshot);
-	
+	float sinv = sin(0.1 * 3.14159 / 180.0);
+	float cosv = cos(0.1 * 3.14159 / 180.0);
+
 	while(!done) {
 		ENetEvent ev;
 		
@@ -93,10 +91,24 @@ int main(int argc, char** argv) {
 				break;
 			}
 		}
+
+		for(int i = 0; i < nStates; i++) {
+			float x = states[i].pos().x();
+			float y = states[i].pos().y();
+
+			states[i].mutable_pos().mutate_x(x * cosv - y * sinv);
+			states[i].mutable_pos().mutate_y(x * sinv + y * cosv);
+		}
+
+		//Simple world
+		FlatBufferBuilder builder;
+		auto statesOffset = builder.CreateVectorOfStructs(states, nStates);
+		auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, 0);
+		builder.Finish(snapshot);
 		
 		ENetPacket* toSend = enet_packet_create(
 					 builder.GetBufferPointer(),
-					 builder.GetSize(), //size
+					 builder.GetSize(),
 					 0);
 
 		enet_host_broadcast(server, 0, toSend);
