@@ -81,6 +81,18 @@ bool linkProgram(glh::Program& p, const char* name) {
 	return true;
 }
 
+mathfu::mat4 projection(int winWidth, int winHeight, double worldSize) {
+    double side = worldSize;
+
+    if(winWidth >= winHeight) {
+        double ratio = winWidth / (double) winHeight;
+        return mathfu::mat4::Ortho(-side * ratio, side * ratio, -side, side, 0.1, 2.0);
+    } else {
+        double ratio = winHeight / (double) winWidth;
+        return mathfu::mat4::Ortho(-side, side, -side * ratio, side * ratio, 0.1, 2.0);
+    }
+}
+
 void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	using namespace std;
 	using namespace glh;
@@ -134,11 +146,11 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	circleProgram.setFragmentShader(basicFShader);
 	if(!linkProgram(circleProgram, "circle")) return;
 
-	vec2i size;
+	vec2i size(0, 0);
 	SDL_GL_GetDrawableSize(win, &size.x(), &size.y());
 
 	mat4 view = mat4::LookAt(vec3(0.0), vec3(0.0, 0.0, 0.5), vec3(0.0, 1.0, 0.0), 1.0);
-	mat4 proj = mat4::Ortho(-20.0, 20.0, -20.0, 20.0, 0.1, 5.0);
+	mat4 proj = projection(size.x(), size.y(), 20.0);;
 	mat4 mvp = proj * view;
 
 	glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
@@ -204,6 +216,8 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 			SDL_GL_GetDrawableSize(win, &newSize.x(), &newSize.y());
 			if(newSize != size) {
 				size = newSize;
+				proj = projection(size.x(), size.y(), 20.0);;
+				mvp = proj * view;
 				glViewport(0, 0, size.x(), size.y());
 			}
 		}
