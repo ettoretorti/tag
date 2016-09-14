@@ -75,7 +75,7 @@ int main() {
 #endif
 
 	SDL_Window* win = SDL_CreateWindow(
-	                      "shadows",
+	                      "tag",
 	                      SDL_WINDOWPOS_UNDEFINED,
 	                      SDL_WINDOWPOS_UNDEFINED,
 	                      600,
