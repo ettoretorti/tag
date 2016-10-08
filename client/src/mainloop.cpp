@@ -165,7 +165,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	glVertexAttribDivisor(2, 1);
 
 	PlayerState stateBuf[32];
-	int nPlayers = 0;
+	size_t nPlayers = 0;
 	
 	while(true) {
 		// Network events / player state update
