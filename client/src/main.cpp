@@ -4,6 +4,7 @@
 #include <enet/enet.h>
 
 #include <iostream>
+#include <string>
 
 
 #ifndef NDEBUG
@@ -20,7 +21,7 @@ void APIENTRY gl_error(GLenum src, GLenum type, GLuint id, GLenum severity, GLsi
 
 void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server);
 
-int main() {
+int main(int argc, char** argv) {
 	using namespace std;
 
 	if(enet_initialize()) {
@@ -34,23 +35,37 @@ int main() {
 		return -1;
 	}
 
+
 	ENetPeer* server = nullptr;
 	{
+		const char* hostname = argc < 2 ? "localhost" : argv[1];
+
 		ENetAddress address;
-		enet_address_set_host(&address, "localhost");
+		enet_address_set_host(&address, hostname);
 		address.port = 9998;
+
+		if(argc > 2) {
+			try {
+				unsigned long port = stoul(string(argv[2]));
+				if(port < 65536) {
+					address.port = port;
+				}
+			} catch(...) {
+				cerr << "Could not parse second command line arg ("
+				     << argv[2] << ") into a valid port number. Using the default." << endl;;
+			}
+
+		}
+
 
 		server = enet_host_connect(client, &address, 2, 0);
 
 		ENetEvent event;
 		if(!((enet_host_service(client, &event, 1000) > 0) && event.type == ENET_EVENT_TYPE_CONNECT)) {
 			enet_peer_reset(server);
-			server = nullptr;
+			cerr << "Could not connect to " << hostname << ":" << address.port << endl;
+			return -1;
 		}
-	}
-	if(!server) {
-		cerr << "Could not connect to localhost:9998" << endl;
-		return -1;
 	}
 
 	//get the server to notice us
