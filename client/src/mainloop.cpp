@@ -5,6 +5,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <tag/flatbuf/gamestate_generated.h>
+#include <tag/flatbuf/inputs_generated.h>
 
 #include <glh/Buffer.hpp>
 #include <glh/VArray.hpp>
@@ -19,6 +20,7 @@
 
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 const GLchar* vShaderSrc =
 	"#version 330 core\n"
@@ -171,7 +173,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 		// Network events / player state update
 		{
 			ENetEvent e;
-			const int MAX_EVENTS = 10;
+			const int MAX_EVENTS = 100;
 			int curEvent = 0;
 			while((enet_host_service(client, &e, 0) > 0) && (curEvent++ < MAX_EVENTS)) {
 				switch(e.type) {
@@ -200,6 +202,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 			}
 		}
 
+		Vec2 input(0.0, 0.0);
 		// Input events
 		{
 			SDL_Event e;
@@ -208,7 +211,32 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 				case SDL_QUIT: return;
 				}
 			}
+
+			const Uint8* keyboard = SDL_GetKeyboardState(nullptr);
+			if(keyboard[SDL_SCANCODE_D]) input.mutate_x(input.x() + 1.0);
+			if(keyboard[SDL_SCANCODE_W]) input.mutate_y(input.y() + 1.0);
+			if(keyboard[SDL_SCANCODE_A]) input.mutate_x(input.x() - 1.0);
+			if(keyboard[SDL_SCANCODE_S]) input.mutate_y(input.y() - 1.0);
 		}
+
+		if(abs(input.x()) + abs(input.y()) > 1.0) {
+			input.mutate_x(input.x() * 1.4142);
+			input.mutate_y(input.y() * 1.4142);
+		}
+
+
+		flatbuffers::FlatBufferBuilder builder;
+		auto vec2 = CreatePlayerInput(builder, &input);
+		builder.Finish(vec2);
+
+
+		ENetPacket* toSend = enet_packet_create(
+					 builder.GetBufferPointer(),
+					 builder.GetSize(),
+					 0);
+
+		enet_peer_send(server, 0, toSend);
+		enet_host_flush(client);
 
 		// Framebuffer resizing
 		{
