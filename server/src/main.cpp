@@ -1,7 +1,9 @@
 #include <tag/flatbuf/gamestate_generated.h>
+#include <tag/flatbuf/inputs_generated.h>
 
 #include <enet/enet.h>
 #include <flatbuffers/flatbuffers.h>
+#include <mathfu/vector.h>
 
 #include <iostream>
 #include <string>
@@ -39,6 +41,7 @@ static void logExit(const char* msg) {
 int main(int argc, char** argv) {
 	using namespace flatbuffers;
 	using namespace tag::flatbuf;
+	using namespace std::chrono;
 
 	signal(SIGINT, sigCatcher);
 	signal(SIGTERM, sigCatcher);
@@ -59,53 +62,81 @@ int main(int argc, char** argv) {
 	} else {
 		log("Started server.");
 	}
-	
-	PlayerState states[] = {
-		PlayerState(Vec2( 0.0,  0.0), 1.0, Color(255, 255, 255, 255)),
-		PlayerState(Vec2( 4.0,  4.0), 1.0, Color(255,   0,   0, 255)),
-		PlayerState(Vec2( 4.0, -4.0), 1.0, Color(  0, 255,   0, 255)),
-		PlayerState(Vec2(-4.0, -4.0), 1.0, Color(  0,   0, 255, 255)),
-		PlayerState(Vec2(-4.0,  4.0), 1.0, Color(255, 255,   0, 255)),
-	};
-	int nStates = sizeof(states) / sizeof(states[0]);
 
-	float sinv = sin(0.1 * 3.14159 / 180.0);
-	float cosv = cos(0.1 * 3.14159 / 180.0);
+	PlayerState players[32];
+	mathfu::Vector<float, 2> inputs[32];
+	ENetPeer* peers[32];
+	size_t nPlayers = 0;
+
+
+	const size_t TICKS_PER_SEC = 60;
+	const auto TIMESTEP = duration<int, std::ratio<1,TICKS_PER_SEC>>(1);
+	const double TIMESTEP_F = 1.0 / TICKS_PER_SEC;
+
+	auto nextUpdate = high_resolution_clock::now() + TIMESTEP;
 
 	while(!done) {
 		ENetEvent ev;
-		
+
 		const int MAX_EVENTS = 64;
 		int curEvent = 0;
-		while((enet_host_service(server, &ev, 10) > 0) && (curEvent++ < MAX_EVENTS)) {
+		while((enet_host_service(server, &ev, 1) > 0) && (curEvent++ < MAX_EVENTS)) {
 			switch(ev.type) {
 			case ENET_EVENT_TYPE_CONNECT:
 				std::cout << "New connection!" << std::endl;
+				std::cout << "Assigning to slot: " << nPlayers << std::endl;
+				peers[nPlayers] = ev.peer;
+				ev.peer->data = (void*)nPlayers;
+
+				players[nPlayers] = PlayerState(Vec2(0.0, 0.0), 1.0, Color(255, 255, 255, 255));
+				inputs[nPlayers] = mathfu::Vector<float, 2>(0.0, 0.0);
+				nPlayers++;
 				break;
 			case ENET_EVENT_TYPE_RECEIVE: {
-				std::cout << "Received packet! ignoring..." << std::endl;
+				size_t playerNo = (size_t)ev.peer->data;
+
+				Vec2 input = *flatbuffers::GetRoot<PlayerInput>(ev.packet->data)->movement();
+				inputs[playerNo].x() = input.x();
+				inputs[playerNo].y() = input.y();
+
 				enet_packet_destroy(ev.packet);
 				break; }
 			case ENET_EVENT_TYPE_DISCONNECT:
 				std::cout << "Lost connection." << std::endl;
+
+				size_t playerNo = (size_t)ev.peer->data;
+				std::cout << "Player was in slot: " << playerNo << std::endl;
+
+				std::swap(players[playerNo], players[nPlayers-1]);
+				std::swap(peers[playerNo], peers[nPlayers-1]);
+				nPlayers--;
+
+
 				break;
 			}
 		}
 
-		for(int i = 0; i < nStates; i++) {
-			float x = states[i].pos().x();
-			float y = states[i].pos().y();
+		if(high_resolution_clock::now() >= nextUpdate) {
+			nextUpdate += TIMESTEP;
 
-			states[i].mutable_pos().mutate_x(x * cosv - y * sinv);
-			states[i].mutable_pos().mutate_y(x * sinv + y * cosv);
+			for(size_t i = 0; i < nPlayers; i++) {
+				if(inputs[i].LengthSquared() > 1.0) {
+					inputs[i].Normalize();
+				}
+
+				Vec2& pos = players[i].mutable_pos();
+
+				pos.mutate_x(pos.x() + TIMESTEP_F * 5.0 * inputs[i].x());
+				pos.mutate_y(pos.y() + TIMESTEP_F * 5.0 * inputs[i].y());
+			}
 		}
 
 		//Simple world
 		FlatBufferBuilder builder;
-		auto statesOffset = builder.CreateVectorOfStructs(states, nStates);
+		auto statesOffset = builder.CreateVectorOfStructs(players, nPlayers);
 		auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, 0);
 		builder.Finish(snapshot);
-		
+
 		ENetPacket* toSend = enet_packet_create(
 					 builder.GetBufferPointer(),
 					 builder.GetSize(),
