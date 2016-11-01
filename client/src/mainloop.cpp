@@ -168,6 +168,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 
 	PlayerState stateBuf[32];
 	size_t nPlayers = 0;
+	size_t pIdx = ~0u;
 	
 	while(true) {
 		// Network events / player state update
@@ -183,6 +184,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 				}
 				case ENET_EVENT_TYPE_RECEIVE: {
 					auto snapshot = flatbuffers::GetRoot<Snapshot>(e.packet->data);
+					pIdx = (size_t)snapshot->personalIdx();
 					auto players = snapshot->players();
 					nPlayers = players->size();
 
@@ -245,14 +247,20 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 			if(newSize != size) {
 				size = newSize;
 				proj = projection(size.x(), size.y(), 20.0);;
-				mvp = proj * view;
 				glViewport(0, 0, size.x(), size.y());
 			}
 		}
 
 		glClear(GL_COLOR_BUFFER_BIT);
 		circleProgram.use();
+
+		if(pIdx != ~0u) {
+			vec3 pos(stateBuf[pIdx].pos().x(), stateBuf[pIdx].pos().y(), 0.0);
+			view = mat4::LookAt(pos, pos + vec3(0.0, 0.0, 0.5), vec3(0.0, 1.0, 0.0), 1.0);
+		}
+		mvp = proj * view;
 		glUniformMatrix4fv(basicProgram.getUniform("uMVP"), 1, GL_FALSE, &mvp[0]);
+
 		circleVAO.bind();
 		glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, CIRCLE_SEGMENTS, nPlayers);
 
