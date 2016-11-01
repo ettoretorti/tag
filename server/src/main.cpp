@@ -190,16 +190,19 @@ int main(int argc, char** argv) {
 
 		//Simple world
 		FlatBufferBuilder builder;
-		auto statesOffset = builder.CreateVectorOfStructs(players, nPlayers);
-		auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, 0);
-		builder.Finish(snapshot);
 
-		ENetPacket* toSend = enet_packet_create(
-					 builder.GetBufferPointer(),
-					 builder.GetSize(),
-					 0);
+		for(size_t i = 0; i < nPlayers; i++) {
+			builder.Clear();
+			auto statesOffset = builder.CreateVectorOfStructs(players, nPlayers);
+			auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, i);
+			builder.Finish(snapshot);
+			ENetPacket* toSend = enet_packet_create(
+			                         builder.GetBufferPointer(),
+						 builder.GetSize(),
+						 0);
 
-		enet_host_broadcast(server, 0, toSend);
+			enet_peer_send(peers[i], 0, toSend);
+		}
 
 		enet_host_flush(server);
 	}
