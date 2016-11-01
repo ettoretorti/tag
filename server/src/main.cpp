@@ -38,6 +38,25 @@ static void logExit(const char* msg) {
 	exit(-1);
 }
 
+static mathfu::Vector<float, 2> convert(const tag::flatbuf::Vec2& v) {
+	return mathfu::Vector<float, 2>(v.x(), v.y());
+}
+
+static tag::flatbuf::Vec2 convert(const mathfu::Vector<float, 2>& v) {
+	return tag::flatbuf::Vec2(v.x(), v.y());
+}
+
+static const tag::flatbuf::Color COLORS[] = {
+	tag::flatbuf::Color(255,   0,   0, 255),
+	tag::flatbuf::Color(255, 255,   0, 255),
+	tag::flatbuf::Color(  0, 255,   0, 255),
+	tag::flatbuf::Color(  0, 255, 255, 255),
+	tag::flatbuf::Color(  0,   0, 255, 255),
+	tag::flatbuf::Color(255,   0, 255, 255),
+};
+
+static const size_t N_COLORS = sizeof(COLORS)/sizeof(COLORS[0]);
+
 int main(int argc, char** argv) {
 	using namespace flatbuffers;
 	using namespace tag::flatbuf;
@@ -88,7 +107,7 @@ int main(int argc, char** argv) {
 				peers[nPlayers] = ev.peer;
 				ev.peer->data = (void*)nPlayers;
 
-				players[nPlayers] = PlayerState(Vec2(0.0, 0.0), 1.0, Color(255, 255, 255, 255));
+				players[nPlayers] = PlayerState(Vec2(0.0, 0.0), 1.0, COLORS[nPlayers % N_COLORS]);
 				inputs[nPlayers] = mathfu::Vector<float, 2>(0.0, 0.0);
 				nPlayers++;
 				break;
