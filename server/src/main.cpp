@@ -148,6 +148,44 @@ int main(int argc, char** argv) {
 				pos.mutate_x(pos.x() + TIMESTEP_F * 5.0 * inputs[i].x());
 				pos.mutate_y(pos.y() + TIMESTEP_F * 5.0 * inputs[i].y());
 			}
+
+			const size_t maxIterations = 20;
+			bool noCollisions = false;
+
+			for(size_t i = 0; i < maxIterations && !noCollisions; i++) {
+				noCollisions = true;
+				for(size_t j = 0; j < nPlayers; j++) {
+					for(size_t k = j + 1; k < nPlayers; k++) {
+						mathfu::Vector<float, 2> pos1 = convert(players[j].pos());
+						mathfu::Vector<float, 2> pos2 = convert(players[k].pos());
+
+						float rad1 = players[j].radius();
+						float rad2 = players[k].radius();
+
+						float dSqrd = (rad1 + rad2) * (rad1 + rad2);
+
+						if((pos1 - pos2).LengthSquared() < dSqrd) {
+							noCollisions = false;
+
+							auto disp = pos1 - pos2;
+							float len = disp.Length();
+
+							if(len <= 0.001) {
+								disp.x() = 0.5; disp.y() = 0.0;
+							} else {
+								float missing = rad1 + rad2 - len;
+								disp = (missing * disp / 2.0 * len);
+							}
+
+							pos1 += disp;
+							pos2 -= disp;
+
+							players[j].mutable_pos() = convert(pos1);
+							players[k].mutable_pos() = convert(pos2);
+						}
+					}
+				}
+			}
 		}
 
 		//Simple world
