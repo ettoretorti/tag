@@ -149,6 +149,9 @@ int main(int argc, char** argv) {
 				pInfo[nPlayers].body->CreateFixture(&unitCircle, 1.0);
 
 				pInfo[nPlayers].input = mathfu::Vector<float, 2>(0.0, 0.0);
+
+				pInfo[nPlayers].color = COLORS[nextColor++ % N_COLORS];
+
 				nPlayers++;
 				break; }
 			case ENET_EVENT_TYPE_RECEIVE: {
@@ -198,7 +201,7 @@ int main(int argc, char** argv) {
 		PlayerState players[32];
 		for(size_t i = 0; i < nPlayers; i++) {
 			b2Vec2 pos = pInfo[i].body->GetPosition();
-			players[i] = PlayerState(Vec2(pos.x, pos.y), 1.0, COLORS[i % N_COLORS]);
+			players[i] = PlayerState(Vec2(pos.x, pos.y), 1.0, pInfo[i].color);
 		}
 
 		for(size_t i = 0; i < nPlayers; i++) {
