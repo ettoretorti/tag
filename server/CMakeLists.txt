@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/../shared/cmake")
 
 find_package(ENet REQUIRED)
+find_package(Box2D REQUIRED)
 
 file(GLOB_RECURSE SOURCE_FILES "src/*.cpp" "src/*.c")
 #source groups split files into the correct hierarchy in VS
@@ -19,7 +20,8 @@ target_include_directories(tag_server
     PRIVATE ${CMAKE_SOURCE_DIR}/src
     PRIVATE ${CMAKE_SOURCE_DIR}/include
     PRIVATE ${CMAKE_SOURCE_DIR}/../shared/include
-    PRIVATE ${ENet_INCLUDE_DIRS})
+    PRIVATE ${ENet_INCLUDE_DIRS}
+    PRIVATE ${BOX2D_INCLUDE_DIR})
 
 if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     #g++ options
@@ -30,4 +32,5 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 endif()
 
 target_link_libraries(tag_server
-	${ENet_LIBRARIES})
+    ${ENet_LIBRARIES}
+    ${BOX2D_LIBRARY})
