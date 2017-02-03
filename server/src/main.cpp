@@ -4,6 +4,7 @@
 #include <enet/enet.h>
 #include <flatbuffers/flatbuffers.h>
 #include <mathfu/vector.h>
+#include <Box2D/Box2D.h>
 
 #include <iostream>
 #include <string>
@@ -16,6 +17,7 @@ const int PORT = 9998;
 volatile bool done = false;
 
 static void sigCatcher(int sig) {
+	(void)sig;
 	std::cerr << "Caught signal. Shutting down." << std::endl;
 	done = true;
 }
@@ -62,6 +64,8 @@ int main(int argc, char** argv) {
 	using namespace tag::flatbuf;
 	using namespace std::chrono;
 
+	(void)argc; (void)argv;
+
 	signal(SIGINT, sigCatcher);
 	signal(SIGTERM, sigCatcher);
 
@@ -82,10 +86,37 @@ int main(int argc, char** argv) {
 		log("Started server.");
 	}
 
-	PlayerState players[32];
-	mathfu::Vector<float, 2> inputs[32];
-	ENetPeer* peers[32];
+	const double WIDTH = 40.0;
+	const double HEIGHT = 40.0;
+
+	b2World world(b2Vec2(0.0f, 0.0f));
+	b2Body* outerPerim = nullptr;
+	{
+		b2ChainShape chain;
+		b2Vec2 vs[5] = {
+			b2Vec2(-WIDTH/2, -HEIGHT/2), b2Vec2( WIDTH/2, -HEIGHT/2),
+			b2Vec2( WIDTH/2,  HEIGHT/2), b2Vec2(-WIDTH/2,  HEIGHT/2),
+			b2Vec2(-WIDTH/2, -HEIGHT/2)
+		};
+		chain.CreateChain(vs, 5);
+		chain.SetPrevVertex(vs[4]);
+		chain.SetNextVertex(vs[0]);
+
+		b2BodyDef def;
+		def.position.Set(0.0f, 0.0f);
+
+		outerPerim = world.CreateBody(&def);
+		outerPerim->CreateFixture(&chain, 0.0);
+	}
+
+	struct {
+		mathfu::Vector<float, 2> input;
+		ENetPeer* peer;
+		b2Body* body;
+		Color color;
+	} pInfo[32];
 	size_t nPlayers = 0;
+	size_t nextColor = 0;
 
 
 	const size_t TICKS_PER_SEC = 60;
@@ -102,37 +133,46 @@ int main(int argc, char** argv) {
 		int curEvent = 0;
 		while((enet_host_service(server, &ev, 1) > 0) && (curEvent++ < MAX_EVENTS)) {
 			switch(ev.type) {
-			case ENET_EVENT_TYPE_CONNECT:
+			case ENET_EVENT_TYPE_CONNECT: {
 				std::cout << "New connection!" << std::endl;
 				std::cout << "Assigning to slot: " << nPlayers << std::endl;
-				peers[nPlayers] = ev.peer;
+				pInfo[nPlayers].peer = ev.peer;
 				ev.peer->data = (void*)nPlayers;
 
-				players[nPlayers] = PlayerState(Vec2(0.0, 0.0), 1.0, COLORS[nPlayers % N_COLORS]);
-				inputs[nPlayers] = mathfu::Vector<float, 2>(0.0, 0.0);
+				b2BodyDef def;
+				def.position.Set(0.0, 0.0);
+				def.type = b2_dynamicBody;
+				b2CircleShape unitCircle;
+				unitCircle.m_p.Set(0, 0);
+				unitCircle.m_radius = 1.0;
+				pInfo[nPlayers].body = world.CreateBody(&def);
+				pInfo[nPlayers].body->CreateFixture(&unitCircle, 1.0);
+
+				pInfo[nPlayers].input = mathfu::Vector<float, 2>(0.0, 0.0);
 				nPlayers++;
-				break;
+				break; }
 			case ENET_EVENT_TYPE_RECEIVE: {
 				size_t playerNo = (size_t)ev.peer->data;
 
 				Vec2 input = *flatbuffers::GetRoot<PlayerInput>(ev.packet->data)->movement();
-				inputs[playerNo].x() = input.x();
-				inputs[playerNo].y() = input.y();
+				pInfo[playerNo].input.x() = input.x();
+				pInfo[playerNo].input.y() = input.y();
 
 				enet_packet_destroy(ev.packet);
 				break; }
-			case ENET_EVENT_TYPE_DISCONNECT:
+			case ENET_EVENT_TYPE_DISCONNECT: {
 				std::cout << "Lost connection." << std::endl;
 
 				size_t playerNo = (size_t)ev.peer->data;
 				std::cout << "Player was in slot: " << playerNo << std::endl;
 
-				std::swap(players[playerNo], players[nPlayers-1]);
-				std::swap(peers[playerNo], peers[nPlayers-1]);
+				world.DestroyBody(pInfo[playerNo].body);
+				pInfo[playerNo] = pInfo[nPlayers-1];
 				nPlayers--;
 
 
-				break;
+				break; }
+			default: break;
 			}
 		}
 
@@ -140,58 +180,26 @@ int main(int argc, char** argv) {
 			nextUpdate += TIMESTEP;
 
 			for(size_t i = 0; i < nPlayers; i++) {
-				if(inputs[i].LengthSquared() > 1.0) {
-					inputs[i].Normalize();
+				if(pInfo[i].input.LengthSquared() > 1.0) {
+					pInfo[i].input.Normalize();
 				}
 
-				Vec2& pos = players[i].mutable_pos();
-
-				pos.mutate_x(pos.x() + TIMESTEP_F * 5.0 * inputs[i].x());
-				pos.mutate_y(pos.y() + TIMESTEP_F * 5.0 * inputs[i].y());
+				b2Vec2 bb(5 * pInfo[i].input.x(), 5 * pInfo[i].input.y());
+				pInfo[i].body->SetLinearVelocity(bb);
 			}
 
-			const size_t maxIterations = 20;
-			bool noCollisions = false;
-
-			for(size_t i = 0; i < maxIterations && !noCollisions; i++) {
-				noCollisions = true;
-				for(size_t j = 0; j < nPlayers; j++) {
-					for(size_t k = j + 1; k < nPlayers; k++) {
-						mathfu::Vector<float, 2> pos1 = convert(players[j].pos());
-						mathfu::Vector<float, 2> pos2 = convert(players[k].pos());
-
-						float rad1 = players[j].radius();
-						float rad2 = players[k].radius();
-
-						float dSqrd = (rad1 + rad2) * (rad1 + rad2);
-
-						if((pos1 - pos2).LengthSquared() < dSqrd) {
-							noCollisions = false;
-
-							auto disp = pos1 - pos2;
-							float len = disp.Length();
-
-							if(len <= 0.001) {
-								disp.x() = 0.5; disp.y() = 0.0;
-							} else {
-								float missing = rad1 + rad2 - len;
-								disp = (missing * disp / 2.0 * len);
-							}
-
-							pos1 += disp;
-							pos2 -= disp;
-
-							players[j].mutable_pos() = convert(pos1);
-							players[k].mutable_pos() = convert(pos2);
-						}
-					}
-				}
-			}
+			world.Step(TIMESTEP_F, 10, 10);
 		}
 
 		//Simple world
 		FlatBufferBuilder builder;
 		double curTime = duration<double>(high_resolution_clock::now() - startTime).count();
+
+		PlayerState players[32];
+		for(size_t i = 0; i < nPlayers; i++) {
+			b2Vec2 pos = pInfo[i].body->GetPosition();
+			players[i] = PlayerState(Vec2(pos.x, pos.y), 1.0, COLORS[i % N_COLORS]);
+		}
 
 		for(size_t i = 0; i < nPlayers; i++) {
 			builder.Clear();
@@ -203,7 +211,7 @@ int main(int argc, char** argv) {
 						 builder.GetSize(),
 						 0);
 
-			enet_peer_send(peers[i], 0, toSend);
+			enet_peer_send(pInfo[i].peer, 0, toSend);
 		}
 
 		enet_host_flush(server);
