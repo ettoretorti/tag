@@ -92,7 +92,8 @@ int main(int argc, char** argv) {
 	const auto TIMESTEP = duration<int, std::ratio<1,TICKS_PER_SEC>>(1);
 	const double TIMESTEP_F = 1.0 / TICKS_PER_SEC;
 
-	auto nextUpdate = high_resolution_clock::now() + TIMESTEP;
+	auto startTime = high_resolution_clock::now();
+	auto nextUpdate = startTime + TIMESTEP;
 
 	while(!done) {
 		ENetEvent ev;
@@ -190,11 +191,12 @@ int main(int argc, char** argv) {
 
 		//Simple world
 		FlatBufferBuilder builder;
+		double curTime = duration<double>(high_resolution_clock::now() - startTime).count();
 
 		for(size_t i = 0; i < nPlayers; i++) {
 			builder.Clear();
 			auto statesOffset = builder.CreateVectorOfStructs(players, nPlayers);
-			auto snapshot = CreateSnapshot(builder, 0.0, statesOffset, i);
+			auto snapshot = CreateSnapshot(builder, curTime, statesOffset, i);
 			builder.Finish(snapshot);
 			ENetPacket* toSend = enet_packet_create(
 			                         builder.GetBufferPointer(),
