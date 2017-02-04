@@ -222,8 +222,8 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 		}
 
 		if(abs(input.x()) + abs(input.y()) > 1.0) {
-			input.mutate_x(input.x() * 1.4142);
-			input.mutate_y(input.y() * 1.4142);
+			input.mutate_x(input.x() * (1.0/1.4142));
+			input.mutate_y(input.y() * (1.0/1.4142));
 		}
 
 
