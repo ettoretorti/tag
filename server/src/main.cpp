@@ -12,6 +12,9 @@
 #include <csignal>
 #include <cmath>
 #include <chrono>
+#include <set>
+
+#include "CollHandler.hpp"
 
 const int PORT = 9998;
 volatile bool done = false;
@@ -109,6 +112,11 @@ int main(int argc, char** argv) {
 		outerPerim->CreateFixture(&chain, 0.0);
 	}
 
+	std::set<CollHandler::CollPair> collisions;
+	auto insertColl = [&] (CollHandler::CollPair p) { collisions.insert(p); };
+	CollHandler ch(insertColl);
+	world.SetContactListener(&ch);
+
 	struct {
 		mathfu::Vector<float, 2> input;
 		ENetPeer* peer;
@@ -142,6 +150,8 @@ int main(int argc, char** argv) {
 				b2BodyDef def;
 				def.position.Set(0.0, 0.0);
 				def.type = b2_dynamicBody;
+				def.fixedRotation = true;
+				def.userData = (void*)nPlayers;
 				b2CircleShape unitCircle;
 				unitCircle.m_p.Set(0, 0);
 				unitCircle.m_radius = 1.0;
@@ -192,6 +202,10 @@ int main(int argc, char** argv) {
 			}
 
 			world.Step(TIMESTEP_F, 10, 10);
+
+			//Handle collisions here
+
+			collisions.clear();
 		}
 
 		//Simple world
