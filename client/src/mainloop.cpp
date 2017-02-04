@@ -36,7 +36,7 @@ const GLchar* vShaderSrc =
 	"    fColor = aColor;\n"
 	"}\n";
 
-const GLchar* fShaderSrc = 
+const GLchar* fShaderSrc =
 	"#version 330 core\n"
 	"\n"
 	"in vec4 fColor;\n"
@@ -102,7 +102,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	using geom::Circle;
 	using geom::Polygon;
 	using namespace tag::flatbuf;
-	
+
 	Buffer circleVerts(GL_ARRAY_BUFFER);
 	const int CIRCLE_SEGMENTS = 64;
 	{
@@ -110,14 +110,14 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 		Polygon unitCircleTess(unitCircle, CIRCLE_SEGMENTS);
 
 		VectorPacked<float, 2> vBuf[CIRCLE_SEGMENTS];
-		
+
 		for(int i = 0; i < CIRCLE_SEGMENTS; i++) {
 			vBuf[i] = unitCircleTess.point(i);
 		}
-		
+
 		circleVerts.data(CIRCLE_SEGMENTS * 2 * sizeof(GLfloat), vBuf, GL_STATIC_DRAW);
 	}
-	
+
 	// Meant for instanced rendering of circles
 	VArray circleVAO;
 	circleVAO.enableVertexAttrib(0);
@@ -161,7 +161,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	circleVAO.enableVertexAttrib(1);
 	circleVAO.vertexAttribPointer(playerData, 1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 16, 12);
 	glVertexAttribDivisor(1, 1);
-	
+
 	circleVAO.enableVertexAttrib(2);
 	circleVAO.vertexAttribPointer(playerData, 2, 3, GL_FLOAT, GL_FALSE, 16, 0);
 	glVertexAttribDivisor(2, 1);
@@ -169,7 +169,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	PlayerState stateBuf[32];
 	size_t nPlayers = 0;
 	size_t pIdx = ~0u;
-	
+
 	while(true) {
 		// Network events / player state update
 		{
@@ -191,7 +191,7 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 					for(size_t i = 0; i < nPlayers; i++) {
 						memcpy(stateBuf + i, players->Get(i), sizeof(PlayerState));
 					}
-					
+
 					// buffer orphaning
 					playerData.data(32 * sizeof(PlayerState), nullptr, GL_STATIC_DRAW);
 					playerData.subData(0, nPlayers * sizeof(PlayerState), stateBuf);
