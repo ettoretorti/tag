@@ -32,6 +32,14 @@ inline const char **EnumNamesClientPacketRT() {
 
 inline const char *EnumNameClientPacketRT(ClientPacketRT e) { return EnumNamesClientPacketRT()[static_cast<int>(e)]; }
 
+template<typename T> struct ClientPacketRTTraits {
+  static const ClientPacketRT enum_value = ClientPacketRT_NONE;
+};
+
+template<> struct ClientPacketRTTraits<tag::flatbuf::PlayerInput> {
+  static const ClientPacketRT enum_value = ClientPacketRT_PlayerInput;
+};
+
 inline bool VerifyClientPacketRT(flatbuffers::Verifier &verifier, const void *union_obj, ClientPacketRT type);
 
 /// A packet sent from the server realtime
@@ -49,6 +57,14 @@ inline const char **EnumNamesServerPacketRT() {
 
 inline const char *EnumNameServerPacketRT(ServerPacketRT e) { return EnumNamesServerPacketRT()[static_cast<int>(e)]; }
 
+template<typename T> struct ServerPacketRTTraits {
+  static const ServerPacketRT enum_value = ServerPacketRT_NONE;
+};
+
+template<> struct ServerPacketRTTraits<tag::flatbuf::Snapshot> {
+  static const ServerPacketRT enum_value = ServerPacketRT_Snapshot;
+};
+
 inline bool VerifyServerPacketRT(flatbuffers::Verifier &verifier, const void *union_obj, ServerPacketRT type);
 
 /// A reliable packet sent from a client
@@ -56,16 +72,33 @@ enum ClientPacket {
   ClientPacket_NONE = 0,
   ClientPacket_ACK = 1,
   ClientPacket_NAK = 2,
+  ClientPacket_MapRequest = 3,
   ClientPacket_MIN = ClientPacket_NONE,
-  ClientPacket_MAX = ClientPacket_NAK
+  ClientPacket_MAX = ClientPacket_MapRequest
 };
 
 inline const char **EnumNamesClientPacket() {
-  static const char *names[] = { "NONE", "ACK", "NAK", nullptr };
+  static const char *names[] = { "NONE", "ACK", "NAK", "MapRequest", nullptr };
   return names;
 }
 
 inline const char *EnumNameClientPacket(ClientPacket e) { return EnumNamesClientPacket()[static_cast<int>(e)]; }
+
+template<typename T> struct ClientPacketTraits {
+  static const ClientPacket enum_value = ClientPacket_NONE;
+};
+
+template<> struct ClientPacketTraits<ACK> {
+  static const ClientPacket enum_value = ClientPacket_ACK;
+};
+
+template<> struct ClientPacketTraits<NAK> {
+  static const ClientPacket enum_value = ClientPacket_NAK;
+};
+
+template<> struct ClientPacketTraits<tag::flatbuf::MapRequest> {
+  static const ClientPacket enum_value = ClientPacket_MapRequest;
+};
 
 inline bool VerifyClientPacket(flatbuffers::Verifier &verifier, const void *union_obj, ClientPacket type);
 
@@ -74,16 +107,33 @@ enum ServerPacket {
   ServerPacket_NONE = 0,
   ServerPacket_ACK = 1,
   ServerPacket_NAK = 2,
+  ServerPacket_Map = 3,
   ServerPacket_MIN = ServerPacket_NONE,
-  ServerPacket_MAX = ServerPacket_NAK
+  ServerPacket_MAX = ServerPacket_Map
 };
 
 inline const char **EnumNamesServerPacket() {
-  static const char *names[] = { "NONE", "ACK", "NAK", nullptr };
+  static const char *names[] = { "NONE", "ACK", "NAK", "Map", nullptr };
   return names;
 }
 
 inline const char *EnumNameServerPacket(ServerPacket e) { return EnumNamesServerPacket()[static_cast<int>(e)]; }
+
+template<typename T> struct ServerPacketTraits {
+  static const ServerPacket enum_value = ServerPacket_NONE;
+};
+
+template<> struct ServerPacketTraits<ACK> {
+  static const ServerPacket enum_value = ServerPacket_ACK;
+};
+
+template<> struct ServerPacketTraits<NAK> {
+  static const ServerPacket enum_value = ServerPacket_NAK;
+};
+
+template<> struct ServerPacketTraits<tag::flatbuf::Map> {
+  static const ServerPacket enum_value = ServerPacket_Map;
+};
 
 inline bool VerifyServerPacket(flatbuffers::Verifier &verifier, const void *union_obj, ServerPacket type);
 
@@ -155,6 +205,7 @@ inline bool VerifyClientPacket(flatbuffers::Verifier &verifier, const void *unio
     case ClientPacket_NONE: return true;
     case ClientPacket_ACK: return verifier.VerifyTable(reinterpret_cast<const ACK *>(union_obj));
     case ClientPacket_NAK: return verifier.VerifyTable(reinterpret_cast<const NAK *>(union_obj));
+    case ClientPacket_MapRequest: return verifier.VerifyTable(reinterpret_cast<const tag::flatbuf::MapRequest *>(union_obj));
     default: return false;
   }
 }
@@ -164,6 +215,7 @@ inline bool VerifyServerPacket(flatbuffers::Verifier &verifier, const void *unio
     case ServerPacket_NONE: return true;
     case ServerPacket_ACK: return verifier.VerifyTable(reinterpret_cast<const ACK *>(union_obj));
     case ServerPacket_NAK: return verifier.VerifyTable(reinterpret_cast<const NAK *>(union_obj));
+    case ServerPacket_Map: return verifier.VerifyTable(reinterpret_cast<const tag::flatbuf::Map *>(union_obj));
     default: return false;
   }
 }

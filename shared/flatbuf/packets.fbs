@@ -11,10 +11,10 @@ union ClientPacketRT { PlayerInput }
 union ServerPacketRT { Snapshot }
 
 /// A reliable packet sent from a client
-union ClientPacket { ACK, NAK }
+union ClientPacket { ACK, NAK, MapRequest }
 
 /// A reliable packet sent from the server
-union ServerPacket { ACK, NAK }
+union ServerPacket { ACK, NAK, Map }
 
 /// Acknowledgement of previous messages
 table ACK {}

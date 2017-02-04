@@ -14,6 +14,8 @@ struct ObstacleWColor;
 
 struct Map;
 
+struct MapRequest;
+
 /// Represents an obstacle on a map
 enum Obstacle {
   Obstacle_NONE = 0,
@@ -29,6 +31,18 @@ inline const char **EnumNamesObstacle() {
 }
 
 inline const char *EnumNameObstacle(Obstacle e) { return EnumNamesObstacle()[static_cast<int>(e)]; }
+
+template<typename T> struct ObstacleTraits {
+  static const Obstacle enum_value = Obstacle_NONE;
+};
+
+template<> struct ObstacleTraits<tag::flatbuf::Circle> {
+  static const Obstacle enum_value = Obstacle_Circle;
+};
+
+template<> struct ObstacleTraits<tag::flatbuf::Polygon> {
+  static const Obstacle enum_value = Obstacle_Polygon;
+};
 
 inline bool VerifyObstacle(flatbuffers::Verifier &verifier, const void *union_obj, Obstacle type);
 
@@ -139,6 +153,30 @@ inline flatbuffers::Offset<Map> CreateMapDirect(flatbuffers::FlatBufferBuilder &
     const tag::flatbuf::Color *background = 0,
     const std::vector<flatbuffers::Offset<ObstacleWColor>> *obstacles = nullptr) {
   return CreateMap(_fbb, dimensions, background, obstacles ? _fbb.CreateVector<flatbuffers::Offset<ObstacleWColor>>(*obstacles) : 0);
+}
+
+/// Used to request the map from a server
+struct MapRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           verifier.EndTable();
+  }
+};
+
+struct MapRequestBuilder {
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  MapRequestBuilder(flatbuffers::FlatBufferBuilder &_fbb) : fbb_(_fbb) { start_ = fbb_.StartTable(); }
+  MapRequestBuilder &operator=(const MapRequestBuilder &);
+  flatbuffers::Offset<MapRequest> Finish() {
+    auto o = flatbuffers::Offset<MapRequest>(fbb_.EndTable(start_, 0));
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<MapRequest> CreateMapRequest(flatbuffers::FlatBufferBuilder &_fbb) {
+  MapRequestBuilder builder_(_fbb);
+  return builder_.Finish();
 }
 
 inline bool VerifyObstacle(flatbuffers::Verifier &verifier, const void *union_obj, Obstacle type) {

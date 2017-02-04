@@ -22,3 +22,6 @@ table Map {
     /// The obstacles
     obstacles:[ObstacleWColor];
 }
+
+/// Used to request the map from a server
+table MapRequest {}
