@@ -6,6 +6,7 @@
 
 #include <tag/flatbuf/gamestate_generated.h>
 #include <tag/flatbuf/inputs_generated.h>
+#include <tag/flatbuf/map_generated.h>
 
 #include <glh/Buffer.hpp>
 #include <glh/VArray.hpp>
@@ -21,6 +22,8 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+
+namespace {
 
 const GLchar* vShaderSrc =
 	"#version 330 core\n"
@@ -62,6 +65,20 @@ const GLchar* circleVShaderSrc =
 	"    fColor = aColor;\n"
 	"}\n";
 
+const GLuint ATTR_POS = 0;
+const GLuint ATTR_COL = 1;
+const GLuint ATTR_SCLTRNS = 2;
+
+struct CircleWColor {
+	tag::flatbuf::Vec2 trans;
+	float scale;
+	tag::flatbuf::Color col;
+};
+
+struct PointWColor {
+	tag::flatbuf::Vec2 pos;
+	tag::flatbuf::Color col;
+};
 
 bool compileShader(glh::Shader& shader, const char* name) {
 	if(!shader.compile()) {
@@ -95,6 +112,73 @@ mathfu::mat4 projection(int winWidth, int winHeight, double worldSize) {
     }
 }
 
+std::vector<CircleWColor> map2CirclesWColors(const tag::flatbuf::Map& map) {
+	auto* obstacles = map.obstacles();
+	int nObstacles = obstacles->size();
+
+	std::vector<CircleWColor> toRet;
+
+	for(int i = 0; i < nObstacles; i++) {
+		auto* cur = obstacles->Get(i);
+		if(cur->obstacle_type() == tag::flatbuf::Obstacle_Circle) {
+			auto* circle = static_cast<const tag::flatbuf::Circle*>(cur->obstacle());
+			CircleWColor cc;
+			cc.trans = *circle->center();
+			cc.scale = circle->radius();
+			cc.col = *cur->color();
+			toRet.push_back(cc);
+		}
+	}
+
+	return toRet;
+}
+
+std::vector<PointWColor> map2TrianglesWColors(const tag::flatbuf::Map& map) {
+	auto* obstacles = map.obstacles();
+	int nObstacles = obstacles->size();
+
+	std::vector<PointWColor> toRet;
+
+	//two triangles for the background first
+	{
+		auto color = *map.background();
+		auto dims = *map.dimensions();
+
+		tag::flatbuf::Vec2 ll(-dims.x()/2, -dims.y()/2);
+		tag::flatbuf::Vec2 lr( dims.x()/2, -dims.y()/2);
+		tag::flatbuf::Vec2 ul(-dims.x()/2,  dims.y()/2);
+		tag::flatbuf::Vec2 ur( dims.x()/2,  dims.y()/2);
+
+		toRet.push_back({ll, color});
+		toRet.push_back({ur, color});
+		toRet.push_back({ul, color});
+
+		toRet.push_back({lr, color});
+		toRet.push_back({ur, color});
+		toRet.push_back({ul, color});
+	}
+
+	for(int i = 0; i < nObstacles; i++) {
+		auto* cur = obstacles->Get(i);
+		if(cur->obstacle_type() == tag::flatbuf::Obstacle_Polygon) {
+			auto* pol = static_cast<const tag::flatbuf::Polygon*>(cur->obstacle());
+			auto col = *cur->color();
+			auto* verts = pol->vertices();
+			int nVerts = verts->size();
+
+			for(int i = 1; i < nVerts - 1; i++) {
+				toRet.push_back({*verts->Get(0),col});
+				toRet.push_back({*verts->Get(i), col});
+				toRet.push_back({*verts->Get(i + 1), col});
+			}
+		}
+	}
+
+	return toRet;
+}
+
+} // namespace
+
 void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	using namespace std;
 	using namespace glh;
@@ -120,9 +204,12 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 
 	// Meant for instanced rendering of circles
 	VArray circleVAO;
-	circleVAO.enableVertexAttrib(0);
-	circleVAO.vertexAttribPointer(circleVerts, 0, 2, GL_FLOAT);
-	glVertexAttribDivisor(1, 0);
+	circleVAO.enableVertexAttrib(ATTR_POS);
+	circleVAO.vertexAttribPointer(circleVerts, ATTR_POS, 2, GL_FLOAT);
+	glVertexAttribDivisor(ATTR_POS, 0);
+
+	// Meant for rendering of everything else
+	VArray basicVAO;
 
 	Shader basicVShader(GL_VERTEX_SHADER);
 	basicVShader.source(vShaderSrc);
@@ -158,17 +245,36 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 	glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
 
 	Buffer playerData(GL_ARRAY_BUFFER);
-	circleVAO.enableVertexAttrib(1);
-	circleVAO.vertexAttribPointer(playerData, 1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 16, 12);
-	glVertexAttribDivisor(1, 1);
+	circleVAO.enableVertexAttrib(ATTR_COL);
+	circleVAO.vertexAttribPointer(playerData, ATTR_COL, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CircleWColor), offsetof(CircleWColor, col));
+	glVertexAttribDivisor(ATTR_COL, 1);
 
-	circleVAO.enableVertexAttrib(2);
-	circleVAO.vertexAttribPointer(playerData, 2, 3, GL_FLOAT, GL_FALSE, 16, 0);
-	glVertexAttribDivisor(2, 1);
+	circleVAO.enableVertexAttrib(ATTR_SCLTRNS);
+	circleVAO.vertexAttribPointer(playerData, ATTR_SCLTRNS, 3, GL_FLOAT, GL_FALSE, sizeof(CircleWColor), 0);
+	glVertexAttribDivisor(ATTR_SCLTRNS, 1);
 
 	PlayerState stateBuf[32];
 	size_t nPlayers = 0;
 	size_t pIdx = ~0u;
+
+	size_t nMapCircles = 0;
+	size_t nMapPoints = 0;
+	Buffer mapCircles(GL_ARRAY_BUFFER);
+	Buffer mapPolys(GL_ARRAY_BUFFER);
+
+	// Request map on a reliable channel
+	flatbuffers::FlatBufferBuilder builder;
+	auto req = CreateMapRequest(builder);
+	builder.Finish(req);
+
+	ENetPacket* toSend = enet_packet_create(
+		builder.GetBufferPointer(),
+		builder.GetSize(),
+		ENET_PACKET_FLAG_RELIABLE
+	);
+
+	enet_peer_send(server, 1, toSend);
+	enet_host_flush(client);
 
 	while(true) {
 		// Network events / player state update
@@ -183,18 +289,32 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 					return;
 				}
 				case ENET_EVENT_TYPE_RECEIVE: {
-					auto snapshot = flatbuffers::GetRoot<Snapshot>(e.packet->data);
-					pIdx = (size_t)snapshot->personalIdx();
-					auto players = snapshot->players();
-					nPlayers = players->size();
+					if(e.channelID == 0) {
+						auto snapshot = flatbuffers::GetRoot<Snapshot>(e.packet->data);
+						pIdx = (size_t)snapshot->personalIdx();
+						auto players = snapshot->players();
+						nPlayers = players->size();
 
-					for(size_t i = 0; i < nPlayers; i++) {
-						memcpy(stateBuf + i, players->Get(i), sizeof(PlayerState));
+						for(size_t i = 0; i < nPlayers; i++) {
+							memcpy(stateBuf + i, players->Get(i), sizeof(PlayerState));
+						}
+
+						// buffer orphaning
+						playerData.data(32 * sizeof(PlayerState), nullptr, GL_STATIC_DRAW);
+						playerData.subData(0, nPlayers * sizeof(PlayerState), stateBuf);
+					} else {
+						auto map = flatbuffers::GetRoot<Map>(e.packet->data);
+						auto circles = map2CirclesWColors(*map);
+						auto polys = map2TrianglesWColors(*map);
+
+						nMapCircles = circles.size();
+						nMapPoints = polys.size();
+
+						mapCircles.data(nMapCircles * sizeof(CircleWColor), circles.data(), GL_STATIC_DRAW);
+						mapPolys.data(nMapPoints * sizeof(PointWColor), polys.data(), GL_STATIC_DRAW);
+
+						cout << "Received map" << endl;
 					}
-
-					// buffer orphaning
-					playerData.data(32 * sizeof(PlayerState), nullptr, GL_STATIC_DRAW);
-					playerData.subData(0, nPlayers * sizeof(PlayerState), stateBuf);
 
 					enet_packet_destroy(e.packet);
 					break;
@@ -219,26 +339,29 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 			if(keyboard[SDL_SCANCODE_W]) input.mutate_y(input.y() + 1.0);
 			if(keyboard[SDL_SCANCODE_A]) input.mutate_x(input.x() - 1.0);
 			if(keyboard[SDL_SCANCODE_S]) input.mutate_y(input.y() - 1.0);
+
+			// Normalize if necessary
+			if(abs(input.x()) + abs(input.y()) > 1.0) {
+				input.mutate_x(input.x() * (1.0/1.4142));
+				input.mutate_y(input.y() * (1.0/1.4142));
+			}
 		}
 
-		if(abs(input.x()) + abs(input.y()) > 1.0) {
-			input.mutate_x(input.x() * (1.0/1.4142));
-			input.mutate_y(input.y() * (1.0/1.4142));
+		// Packet sending
+		{
+			flatbuffers::FlatBufferBuilder builder;
+			auto vec2 = CreatePlayerInput(builder, &input);
+			builder.Finish(vec2);
+
+
+			ENetPacket* toSend = enet_packet_create(
+						 builder.GetBufferPointer(),
+						 builder.GetSize(),
+						 0);
+
+			enet_peer_send(server, 0, toSend);
+			enet_host_flush(client);
 		}
-
-
-		flatbuffers::FlatBufferBuilder builder;
-		auto vec2 = CreatePlayerInput(builder, &input);
-		builder.Finish(vec2);
-
-
-		ENetPacket* toSend = enet_packet_create(
-					 builder.GetBufferPointer(),
-					 builder.GetSize(),
-					 0);
-
-		enet_peer_send(server, 0, toSend);
-		enet_host_flush(client);
 
 		// Framebuffer resizing
 		{
@@ -252,17 +375,53 @@ void mainloop(SDL_Window* win, ENetHost* client, ENetPeer* server) {
 		}
 
 		glClear(GL_COLOR_BUFFER_BIT);
-		circleProgram.use();
 
-		if(pIdx != ~0u) {
-			vec3 pos(stateBuf[pIdx].pos().x(), stateBuf[pIdx].pos().y(), 0.0);
-			view = mat4::LookAt(pos, pos + vec3(0.0, 0.0, 0.5), vec3(0.0, 1.0, 0.0), 1.0);
+		// Update player camera to point at our player if defined
+		{
+			if(pIdx != ~0u) {
+				vec3 pos(stateBuf[pIdx].pos().x(), stateBuf[pIdx].pos().y(), 0.0);
+				view = mat4::LookAt(pos, pos + vec3(0.0, 0.0, 0.5), vec3(0.0, 1.0, 0.0), 1.0);
+			}
+			mvp = proj * view;
 		}
-		mvp = proj * view;
-		glUniformMatrix4fv(basicProgram.getUniform("uMVP"), 1, GL_FALSE, &mvp[0]);
 
-		circleVAO.bind();
-		glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, CIRCLE_SEGMENTS, nPlayers);
+		// Render map
+		{
+			if(nMapPoints > 0) {
+				basicProgram.use();
+				glUniformMatrix4fv(basicProgram.getUniform("uMVP"), 1, GL_FALSE, &mvp[0]);
+
+				basicVAO.vertexAttribPointer(mapPolys, ATTR_POS, 2, GL_FLOAT, GL_FALSE, sizeof(PointWColor), 0);
+				basicVAO.vertexAttribPointer(mapPolys, ATTR_COL, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(PointWColor), offsetof(PointWColor, col));
+				basicVAO.bind();
+
+				glDrawArrays(GL_TRIANGLES, 0, nMapPoints);
+			}
+
+			if(nMapCircles > 0) {
+				circleProgram.use();
+				glUniformMatrix4fv(circleProgram.getUniform("uMVP"), 1, GL_FALSE, &mvp[0]);
+
+				circleVAO.vertexAttribPointer(mapCircles, ATTR_COL, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CircleWColor), offsetof(CircleWColor, col));
+				circleVAO.vertexAttribPointer(mapCircles, ATTR_SCLTRNS, 3, GL_FLOAT, GL_FALSE, sizeof(CircleWColor), 0);
+				circleVAO.bind();
+
+				glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, CIRCLE_SEGMENTS, nMapCircles);
+			}
+		}
+
+		// Render players as circles
+		{
+			circleProgram.use();
+
+			glUniformMatrix4fv(circleProgram.getUniform("uMVP"), 1, GL_FALSE, &mvp[0]);
+
+			circleVAO.vertexAttribPointer(playerData, ATTR_COL, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CircleWColor), offsetof(CircleWColor, col));
+			circleVAO.vertexAttribPointer(playerData, ATTR_SCLTRNS, 3, GL_FLOAT, GL_FALSE, sizeof(CircleWColor), 0);
+			circleVAO.bind();
+
+			glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, CIRCLE_SEGMENTS, nPlayers);
+		}
 
 		SDL_GL_SwapWindow(win);
 	}
