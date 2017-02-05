@@ -167,9 +167,13 @@ int main(int argc, char** argv) {
 			case ENET_EVENT_TYPE_RECEIVE: {
 				size_t playerNo = (size_t)ev.peer->data;
 
-				Vec2 input = *flatbuffers::GetRoot<PlayerInput>(ev.packet->data)->movement();
-				pInfo[playerNo].input.x() = input.x();
-				pInfo[playerNo].input.y() = input.y();
+				if(ev.channelID == 0) {
+					Vec2 input = *flatbuffers::GetRoot<PlayerInput>(ev.packet->data)->movement();
+					pInfo[playerNo].input.x() = input.x();
+					pInfo[playerNo].input.y() = input.y();
+				} else {
+					std::cout << "Client requested map" << std::endl;
+				}
 
 				enet_packet_destroy(ev.packet);
 				break; }
