@@ -31,6 +31,9 @@ target_include_directories(tag_client
     PRIVATE ${SDL2_INCLUDE_DIR}
     PRIVATE ${GLEW_INCLUDE_DIRS})
 
+target_compile_definitions(tag_client
+    PUBLIC NOMINMAX)
+
 if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     #g++ options
     target_compile_options(tag_client
